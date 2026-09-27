@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Account {
+  id                  Int      @id @default(autoincrement())
+  account_holder_name String
+  email               String   @unique
+  phone               String
+  created_at          DateTime @default(now())
+  account_status      String   @default("active") // active, suspended, past_due
+
+  lines Line[]
+}
+
+model Line {
+  id                      Int      @id @default(autoincrement())
+  account_id              Int
+  phone_number            String   @unique
+  iccid                   String
+  esim_or_physical        String   // "esim" or "physical"
+  plan_name               String
+  plan_data_limit_gb      Float
+  data_used_gb_this_cycle Float    @default(0)
+  sim_status              String   @default("active") // active, inactive, suspended, swap_pending
+  network_provider        String   // T-Mobile, AT&T, Verizon
+  signal_status           String   @default("normal") // normal, no_service, limited
+  activation_date         DateTime
+  billing_cycle_start_day Int      @default(1)
+
+  account        Account         @relation(fields: [account_id], references: [id])
+  features       LineFeature[]
+  action_history ActionHistory[]
+  agent_logs     AgentLog[]
+}
+
+model LineFeature {
+  id           Int     @id @default(autoincrement())
+  line_id      Int
+  feature_name String
+  enabled      Boolean @default(false)
+
+  line Line @relation(fields: [line_id], references: [id])
+
+  @@unique([line_id, feature_name])
+}
+
+model ActionHistory {
+  id           Int      @id @default(autoincrement())
+  line_id      Int
+  action_type  String // sim_swap, network_change, plan_change, feature_toggle, troubleshoot_reset
+  performed_by String   @default("agent_demo")
+  timestamp    DateTime @default(now())
+  details      String
+  result       String // success, failed
+
+  line Line @relation(fields: [line_id], references: [id])
+}
+
+model AgentLog {
+  id                   Int      @id @default(autoincrement())
+  line_id              Int?
+  case_type            String
+  action_taken         String
+  confidence_score     Float
+  handle_time_seconds  Int
+  outcome              String
+  timestamp            DateTime @default(now())
+
+  line Line? @relation(fields: [line_id], references: [id])
+}
