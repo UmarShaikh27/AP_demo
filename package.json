@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "postinstall": "prisma generate",
     "db:push": "npx tsx prisma/init-turso.ts",
     "db:init": "npx tsx prisma/init-turso.ts",
     "seed": "npx tsx prisma/seed.ts"
