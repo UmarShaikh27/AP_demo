@@ -1,9 +1,20 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import path from "path";
+import "dotenv/config";
 
-const dbPath = path.resolve(process.cwd(), "dev.db");
-const adapter = new PrismaLibSql({ url: `file:${dbPath}` });
+// Auto-detect: use Turso if TURSO_DATABASE_URL is set, otherwise local SQLite
+const isTurso = !!process.env.TURSO_DATABASE_URL;
+
+const adapter = isTurso
+  ? new PrismaLibSql({
+      url: process.env.TURSO_DATABASE_URL!,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    })
+  : new PrismaLibSql({
+      url: `file:${path.resolve(process.cwd(), "dev.db")}`,
+    });
+
 const prisma = new PrismaClient({ adapter });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
