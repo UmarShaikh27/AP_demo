@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/auth";
+import { buildLineWhere } from "@/lib/lookup";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
@@ -10,15 +11,26 @@ export async function POST(
   if (authError) return authError;
 
   const { id, featureId } = await params;
-  const lineId = parseInt(id, 10);
-  const fId = parseInt(featureId, 10);
-
-  if (isNaN(lineId) || isNaN(fId)) {
-    return NextResponse.json({ error: "Invalid line or feature ID" }, { status: 400 });
+  if (!id || !featureId) {
+    return NextResponse.json({ error: "Line and feature identifiers required" }, { status: 400 });
   }
 
+  const line = await prisma.line.findFirst({ where: buildLineWhere(id) });
+  if (!line) {
+    return NextResponse.json({ error: "Line not found" }, { status: 404 });
+  }
+
+  const decodedFeature = decodeURIComponent(featureId).trim();
+  const fId = parseInt(decodedFeature, 10);
+  const isNumericFeatureId = !isNaN(fId) && String(fId) === decodedFeature;
+
   const feature = await prisma.lineFeature.findFirst({
-    where: { id: fId, line_id: lineId },
+    where: {
+      line_id: line.id,
+      ...(isNumericFeatureId
+        ? { OR: [{ id: fId }, { feature_name: decodedFeature }] }
+        : { feature_name: decodedFeature }),
+    },
   });
 
   if (!feature) {
@@ -28,13 +40,13 @@ export async function POST(
   const newEnabled = !feature.enabled;
 
   await prisma.lineFeature.update({
-    where: { id: fId },
+    where: { id: feature.id },
     data: { enabled: newEnabled },
   });
 
   const history = await prisma.actionHistory.create({
     data: {
-      line_id: lineId,
+      line_id: line.id,
       action_type: "feature_toggle",
       performed_by: "ai_agent",
       details: `${feature.feature_name} ${newEnabled ? "enabled" : "disabled"}`,

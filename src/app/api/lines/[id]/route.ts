@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/auth";
+import { buildLineWhere } from "@/lib/lookup";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -10,14 +11,12 @@ export async function GET(
   if (authError) return authError;
 
   const { id } = await params;
-  const lineId = parseInt(id, 10);
-
-  if (isNaN(lineId)) {
-    return NextResponse.json({ error: "Invalid line ID" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: "Line identifier required" }, { status: 400 });
   }
 
-  const line = await prisma.line.findUnique({
-    where: { id: lineId },
+  const line = await prisma.line.findFirst({
+    where: buildLineWhere(id),
     include: {
       features: {
         select: {
@@ -50,11 +49,14 @@ export async function GET(
     account_id: line.account_id,
     phone_number: line.phone_number,
     iccid: line.iccid,
+    imei: line.imei,
     type: line.esim_or_physical,
     plan_name: line.plan_name,
     plan_data_limit_gb: line.plan_data_limit_gb,
     data_used_gb_this_cycle: line.data_used_gb_this_cycle,
-    percent_used: Math.round((line.data_used_gb_this_cycle / line.plan_data_limit_gb) * 100),
+    percent_used: line.plan_data_limit_gb >= 999
+      ? null
+      : Math.round((line.data_used_gb_this_cycle / line.plan_data_limit_gb) * 100),
     sim_status: line.sim_status,
     network_provider: line.network_provider,
     signal_status: line.signal_status,
@@ -63,4 +65,5 @@ export async function GET(
     features: line.features,
     recent_actions: line.action_history,
   });
+
 }

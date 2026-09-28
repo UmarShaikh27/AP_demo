@@ -95,20 +95,26 @@ All external API endpoints require header: `x-api-key: usm-demo-api-key-2024`
 
 All external endpoints require: `x-api-key: usm-demo-api-key-2024` header.
 
+> **Flexible Identifier Support**: Across **all** `/api/lines/:id` and `/api/accounts/:id` endpoints, `:id` accepts:
+> - A **10-digit phone number** (e.g. `2125559101` or `(212) 555-9101`)
+> - An **E.164 phone number** (e.g. `+12125559101`)
+> - A numeric **Line / Account ID** (e.g. `1`)
+> - Or for accounts: the **account email** (e.g. `marcus.johnson@email.com`)
+
 ### Read Endpoints
 
 #### GET `/api/accounts/:id`
-Full account with lines summary.
+Full account with lines summary (accepts Account ID, Account Email, or any Line's Phone Number).
 
 ```bash
-curl http://localhost:3000/api/accounts/1 -H "x-api-key: usm-demo-api-key-2024"
+curl http://localhost:3000/api/accounts/2125559101 -H "x-api-key: usm-demo-api-key-2024"
 ```
 
 #### GET `/api/lines/:id`
-Full line detail including features and last 10 action history entries.
+Full line detail including features and last 10 action history entries (accepts 10-digit Phone Number or Line ID).
 
 ```bash
-curl http://localhost:3000/api/lines/1 -H "x-api-key: usm-demo-api-key-2024"
+curl http://localhost:3000/api/lines/2125559101 -H "x-api-key: usm-demo-api-key-2024"
 ```
 
 #### GET `/api/lines/:id/usage`

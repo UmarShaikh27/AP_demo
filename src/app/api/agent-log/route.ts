@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/auth";
+import { buildLineWhere } from "@/lib/lookup";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -13,30 +14,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { line_id, case_type, action_taken, confidence_score, handle_time_seconds, outcome } = body;
+  const { line_id, phone_number, case_type, action_taken, confidence_score, handle_time_seconds, outcome } = body;
 
   if (!case_type || !action_taken || confidence_score === undefined || handle_time_seconds === undefined || !outcome) {
     return NextResponse.json(
       {
         error: "Missing required fields",
         required: ["case_type", "action_taken", "confidence_score", "handle_time_seconds", "outcome"],
-        optional: ["line_id"],
+        optional: ["line_id", "phone_number"],
       },
       { status: 400 }
     );
   }
 
-  // Validate line_id if provided
-  if (line_id) {
-    const line = await prisma.line.findUnique({ where: { id: line_id } });
+  // Validate and resolve line_id if provided as ID or phone number
+  let resolvedLineId: number | null = null;
+  const lineIdentifier = line_id || phone_number;
+
+  if (lineIdentifier) {
+    const line = await prisma.line.findFirst({ where: buildLineWhere(String(lineIdentifier)) });
     if (!line) {
       return NextResponse.json({ error: "Line not found" }, { status: 404 });
     }
+    resolvedLineId = line.id;
   }
 
   const log = await prisma.agentLog.create({
     data: {
-      line_id: line_id || null,
+      line_id: resolvedLineId,
       case_type,
       action_taken,
       confidence_score: parseFloat(confidence_score),

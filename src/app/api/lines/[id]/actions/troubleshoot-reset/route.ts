@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/auth";
+import { buildLineWhere } from "@/lib/lookup";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
@@ -10,13 +11,11 @@ export async function POST(
   if (authError) return authError;
 
   const { id } = await params;
-  const lineId = parseInt(id, 10);
-
-  if (isNaN(lineId)) {
-    return NextResponse.json({ error: "Invalid line ID" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: "Line identifier required" }, { status: 400 });
   }
 
-  const line = await prisma.line.findUnique({ where: { id: lineId } });
+  const line = await prisma.line.findFirst({ where: buildLineWhere(id) });
   if (!line) {
     return NextResponse.json({ error: "Line not found" }, { status: 404 });
   }
@@ -26,14 +25,14 @@ export async function POST(
 
   if (success) {
     await prisma.line.update({
-      where: { id: lineId },
+      where: { id: line.id },
       data: { signal_status: "normal" },
     });
   }
 
   const history = await prisma.actionHistory.create({
     data: {
-      line_id: lineId,
+      line_id: line.id,
       action_type: "troubleshoot_reset",
       performed_by: "ai_agent",
       details: success

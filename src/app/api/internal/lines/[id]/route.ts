@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { buildLineWhere } from "@/lib/lookup";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -6,10 +7,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const lineId = parseInt(id, 10);
+  if (!id) {
+    return NextResponse.json({ error: "Line identifier required" }, { status: 400 });
+  }
 
-  const line = await prisma.line.findUnique({
-    where: { id: lineId },
+  const line = await prisma.line.findFirst({
+    where: buildLineWhere(id),
     include: {
       account: {
         select: {
@@ -23,8 +26,12 @@ export async function GET(
       action_history: {
         orderBy: { timestamp: "desc" },
       },
+      orders: {
+        orderBy: { purchased_at: "desc" },
+      },
     },
   });
+
 
   if (!line) {
     return NextResponse.json({ error: "Line not found" }, { status: 404 });

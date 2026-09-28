@@ -12,12 +12,10 @@ async function initTurso() {
 
   console.log(`Connecting to Turso database: ${url}...`);
 
-  const client = createClient({
-    url,
-    authToken,
-  });
+  const client = createClient({ url, authToken });
 
   const schemaStatements = [
+    // ── Core tables (idempotent) ─────────────────────────────────────────────
     `CREATE TABLE IF NOT EXISTS "Account" (
       "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
       "account_holder_name" TEXT NOT NULL,
@@ -33,6 +31,7 @@ async function initTurso() {
       "account_id" INTEGER NOT NULL,
       "phone_number" TEXT NOT NULL,
       "iccid" TEXT NOT NULL,
+      "imei" TEXT NOT NULL DEFAULT '',
       "esim_or_physical" TEXT NOT NULL,
       "plan_name" TEXT NOT NULL,
       "plan_data_limit_gb" REAL NOT NULL,
@@ -45,6 +44,19 @@ async function initTurso() {
       CONSTRAINT "Line_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "Account" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
     );`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Line_phone_number_key" ON "Line"("phone_number");`,
+
+    `CREATE TABLE IF NOT EXISTS "Order" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "order_id" TEXT NOT NULL,
+      "line_id" INTEGER NOT NULL,
+      "plan_name" TEXT NOT NULL,
+      "plan_data_limit_gb" REAL NOT NULL,
+      "order_type" TEXT NOT NULL DEFAULT 'new_plan',
+      "purchased_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "cycle_start" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "Order_line_id_fkey" FOREIGN KEY ("line_id") REFERENCES "Line" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Order_order_id_key" ON "Order"("order_id");`,
 
     `CREATE TABLE IF NOT EXISTS "LineFeature" (
       "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -76,12 +88,29 @@ async function initTurso() {
       "outcome" TEXT NOT NULL,
       "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "AgentLog_line_id_fkey" FOREIGN KEY ("line_id") REFERENCES "Line" ("id") ON DELETE SET NULL ON UPDATE CASCADE
-    );`
+    );`,
+
+    // ── Additive migrations (safe on existing DBs) ───────────────────────────
+    // Add imei column if it doesn't exist yet
+    `ALTER TABLE "Line" ADD COLUMN "imei" TEXT NOT NULL DEFAULT '';`,
   ];
 
   console.log("Applying schema to Turso...");
   for (const sql of schemaStatements) {
-    await client.execute(sql);
+    try {
+      await client.execute(sql);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Skip "already exists" and "duplicate column" errors — those are safe
+      if (
+        msg.includes("already exists") ||
+        msg.includes("duplicate column name") ||
+        msg.includes("UNIQUE constraint") // index already exists
+      ) {
+        continue;
+      }
+      console.warn(`  ⚠ Skipped: ${msg.split("\n")[0]}`);
+    }
   }
 
   console.log("✅ Schema successfully applied to Turso database!");

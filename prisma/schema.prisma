@@ -22,6 +22,7 @@ model Line {
   account_id              Int
   phone_number            String   @unique
   iccid                   String
+  imei                    String
   esim_or_physical        String   // "esim" or "physical"
   plan_name               String
   plan_data_limit_gb      Float
@@ -36,6 +37,20 @@ model Line {
   features       LineFeature[]
   action_history ActionHistory[]
   agent_logs     AgentLog[]
+  orders         Order[]
+}
+
+model Order {
+  id           Int      @id @default(autoincrement())
+  order_id     String   @unique // human-readable order ID e.g. ORD-00001
+  line_id      Int
+  plan_name    String
+  plan_data_limit_gb Float
+  order_type   String   @default("new_plan") // new_plan, renewal
+  purchased_at DateTime @default(now())
+  cycle_start  DateTime @default(now())
+
+  line Line @relation(fields: [line_id], references: [id])
 }
 
 model LineFeature {

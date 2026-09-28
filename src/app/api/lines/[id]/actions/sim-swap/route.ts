@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/auth";
+import { buildLineWhere } from "@/lib/lookup";
 import { NextRequest, NextResponse } from "next/server";
+
+function generateICCID(): string {
+  let iccid = "8901";
+  for (let i = 0; i < 16; i++) iccid += Math.floor(Math.random() * 10);
+  return iccid; // 20 digits
+}
 
 export async function POST(
   request: NextRequest,
@@ -10,31 +17,37 @@ export async function POST(
   if (authError) return authError;
 
   const { id } = await params;
-  const lineId = parseInt(id, 10);
-
-  if (isNaN(lineId)) {
-    return NextResponse.json({ error: "Invalid line ID" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: "Line identifier required" }, { status: 400 });
   }
 
   const body = await request.json();
-  const { new_iccid, new_imei } = body;
+  const { imei } = body;
 
-  if (!new_iccid) {
-    return NextResponse.json({ error: "new_iccid is required" }, { status: 400 });
+  if (!imei || String(imei).replace(/\D/g, "").length !== 15) {
+    return NextResponse.json(
+      { error: "A valid 15-digit IMEI is required for a SIM swap" },
+      { status: 400 }
+    );
   }
 
-  const line = await prisma.line.findUnique({ where: { id: lineId } });
+  const line = await prisma.line.findFirst({ where: buildLineWhere(id) });
   if (!line) {
     return NextResponse.json({ error: "Line not found" }, { status: 404 });
   }
+
+  // Generate a fresh ICCID automatically
+  const newIccid = generateICCID();
+  const cleanImei = String(imei).replace(/\D/g, "");
 
   const success = Math.random() < 0.9;
 
   if (success) {
     await prisma.line.update({
-      where: { id: lineId },
+      where: { id: line.id },
       data: {
-        iccid: new_iccid,
+        iccid: newIccid,
+        imei: cleanImei,
         sim_status: "active",
       },
     });
@@ -42,12 +55,12 @@ export async function POST(
 
   const history = await prisma.actionHistory.create({
     data: {
-      line_id: lineId,
+      line_id: line.id,
       action_type: "sim_swap",
       performed_by: "ai_agent",
       details: success
-        ? `SIM swapped from ${line.iccid} to ${new_iccid}${new_imei ? ` (IMEI: ${new_imei})` : ""}`
-        : `SIM swap to ${new_iccid} failed — verification error`,
+        ? `SIM swap completed — IMEI updated to ${cleanImei}, new ICCID: ${newIccid}`
+        : `SIM swap failed — IMEI ${cleanImei} could not be verified`,
       result: success ? "success" : "failed",
     },
   });
@@ -57,8 +70,10 @@ export async function POST(
     action_type: "sim_swap",
     result: success ? "success" : "failed",
     details: history.details,
-    new_iccid: success ? new_iccid : null,
+    new_iccid: success ? newIccid : null,
+    new_imei: success ? cleanImei : null,
     previous_iccid: line.iccid,
+    previous_imei: line.imei,
     timestamp: history.timestamp,
   });
 }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/auth";
+import { buildLineWhere } from "@/lib/lookup";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -10,15 +11,13 @@ export async function GET(
   if (authError) return authError;
 
   const { id } = await params;
-  const lineId = parseInt(id, 10);
-
-  if (isNaN(lineId)) {
-    return NextResponse.json({ error: "Invalid line ID" }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: "Line identifier required" }, { status: 400 });
   }
 
-  const line = await prisma.line.findUnique({
-    where: { id: lineId },
-    select: { id: true },
+  const line = await prisma.line.findFirst({
+    where: buildLineWhere(id),
+    select: { id: true, phone_number: true },
   });
 
   if (!line) {
@@ -26,7 +25,7 @@ export async function GET(
   }
 
   const history = await prisma.actionHistory.findMany({
-    where: { line_id: lineId },
+    where: { line_id: line.id },
     orderBy: { timestamp: "desc" },
     select: {
       id: true,
@@ -39,7 +38,8 @@ export async function GET(
   });
 
   return NextResponse.json({
-    line_id: lineId,
+    line_id: line.id,
+    phone_number: line.phone_number,
     total_entries: history.length,
     history,
   });
