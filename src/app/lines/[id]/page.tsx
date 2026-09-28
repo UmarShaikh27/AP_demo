@@ -97,6 +97,7 @@ export default function LineDetailPage() {
   const [line, setLine] = useState<LineDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [newImei, setNewImei] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState("");
   const [newNetwork, setNewNetwork] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "orders" | "history">("overview");
@@ -149,6 +150,23 @@ export default function LineDetailPage() {
     }
     performAction(`/api/internal/lines/${id}/actions/sim-swap`, { imei: clean }, "SIM Swap");
     setNewImei("");
+  };
+
+  const handlePlanChange = () => {
+    if (!selectedPlan) {
+      toast.error("Select a plan first");
+      return;
+    }
+    if (selectedPlan === line?.plan_name) {
+      toast.error("Line is already on this plan");
+      return;
+    }
+    performAction(
+      `/api/internal/lines/${id}/actions/plan-change`,
+      { plan_name: selectedPlan },
+      "Plan Change"
+    );
+    setSelectedPlan("");
   };
 
   const handleNetworkChange = () => {
@@ -321,7 +339,7 @@ export default function LineDetailPage() {
           <div className="bg-surface border border-border rounded-xl p-4">
             <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-4">Actions</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {/* SIM Swap — now requires IMEI */}
               <div className="border border-border rounded-lg p-3">
                 <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
@@ -349,6 +367,43 @@ export default function LineDetailPage() {
                   className="w-full px-3 py-1.5 rounded bg-primary hover:bg-primary-hover text-white text-xs font-medium transition-colors disabled:opacity-50"
                 >
                   {actionLoading === "SIM Swap" ? "Processing..." : "Execute SIM Swap"}
+                </button>
+              </div>
+
+              {/* Change Plan */}
+              <div className="border border-border rounded-lg p-3">
+                <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  Change Plan
+                </h4>
+                <p className="text-[0.7rem] text-muted mb-2">
+                  Current: <span className="font-medium text-text-secondary">{line.plan_name}</span>. Changing plan creates a new order and resets your cycle &amp; usage.
+                </p>
+                <select
+                  value={selectedPlan}
+                  onChange={(e) => setSelectedPlan(e.target.value)}
+                  className="w-full bg-background border border-border rounded px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/50 mb-2"
+                >
+                  <option value="">Select plan...</option>
+                  {["Unlimited Premium", "Unlimited Starter", "Unlimited Flex"]
+                    .filter(p => p !== line.plan_name)
+                    .map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                </select>
+                {selectedPlan && (
+                  <p className="text-[0.6rem] text-warning mb-2">
+                    ⚠ Usage will reset to 0 GB and cycle will restart.
+                  </p>
+                )}
+                <button
+                  onClick={handlePlanChange}
+                  disabled={actionLoading !== null || !selectedPlan}
+                  className="w-full px-3 py-1.5 rounded bg-accent/20 hover:bg-accent/30 text-accent border border-accent/30 text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === "Plan Change" ? "Applying..." : "Change Plan"}
                 </button>
               </div>
 
